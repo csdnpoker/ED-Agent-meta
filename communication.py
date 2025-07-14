@@ -112,4 +112,4 @@ async def publish_subtask(js, listen_channel, task_id, query):
         }
     }
     await js.publish(listen_channel, json.dumps(msg).encode())
-    print(f"[分发] 已发布子任务{task_id}到{listen_channel}")
+    print(f"[分发] 已发布任务{task_id}到{listen_channel}")
