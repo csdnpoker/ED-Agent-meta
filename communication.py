@@ -22,6 +22,11 @@ def agent_registry_listener(agent_registry, capability_queues, js):
                 capabilities = payload["capabilities"]
                 listen_channel = payload["listen_channel"]
                 status = payload["status"]
+                # 先将agent_id从所有能力队列中移除
+                for cap, q in capability_queues.items():
+                    if agent_id in q:
+                        q.remove(agent_id)
+                # 再根据新能力分配
                 agent_registry[agent_id] = {
                     "capabilities": capabilities.split(","),
                     "listen_channel": listen_channel,

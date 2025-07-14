@@ -65,6 +65,7 @@ shown below:
 
 # 解析<tasks>...</tasks>格式，返回[(子任务内容, 能力)]
 def parse_tasks(xml_str):
+    xml_str=str(xml_str)
     tasks = []
     m = re.search(r'<tasks>(.*?)</tasks>', xml_str, re.DOTALL)
     if not m:
@@ -86,7 +87,7 @@ async def main():
         pass
     agent_registry = {}
     capability_queues = {}
-    reg_sub = await js.subscribe("meta.register", cb=agent_registry_listener(agent_registry, capability_queues, js), durable="META_REG_DURABLE", ack_wait=30)
+    reg_sub = await js.subscribe("meta.register", cb=agent_registry_listener(agent_registry, capability_queues, js), durable="META_REG_DURABLE")
     # 初始化agent
     agent = RoutingAgent(OPENAI_API_KEY)
     # 拆解所有任务
@@ -112,7 +113,7 @@ async def main():
             await js.add_stream(name=f"TASK_{task['id']}_RESULT", subjects=[ch])
         except Exception:
             pass
-        sub = await js.subscribe(ch, cb=result_listener(result_dict, js, [task["id"]]), durable=f"TASK_{task['id']}_DURABLE", ack_wait=30)
+        sub = await js.subscribe(ch, cb=result_listener(result_dict, js, [task["id"]]), durable=f"TASK_{task['id']}_DURABLE")
         result_subs.append(sub)
     print("[主控] 启动主循环...")
     logging.info("[主控] 启动主循环...")
