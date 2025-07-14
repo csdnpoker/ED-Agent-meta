@@ -171,6 +171,21 @@ the existing results and your available tools to solve the current task.
                 await publish_subtask(js, listen_channel, task["id"], query)
     print("[主控] 所有任务已完成！")
     logging.info("[主控] 所有任务已完成！")
+    # ... existing code ...
+    print("[主控] 所有任务已完成！")
+    logging.info("[主控] 所有任务已完成！")
+    # 保存所有任务的原始提问和最终结果到jsonl文件
+    with open("results.jsonl", "w", encoding="utf-8") as f:
+        for task in TASKS:
+            record = {
+                "id": task["id"],
+                "question": RAW_TASKS[task["id"]-1]["content"],
+                "final_result": task["results"][-1] if task["results"] else ""
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    print("[主控] 所有任务结果已保存到 results.jsonl")
+    logging.info("[主控] 所有任务结果已保存到 results.jsonl")
+# ... existing code ...
     # 所有任务完成后，通知所有子智能体 shutdown
     shutdown_msg = {
         "header": {

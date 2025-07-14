@@ -4,6 +4,7 @@ import time
 from nats.aio.client import Client as NATS
 from nats.js.api import StreamConfig
 import re
+import logging
 
 META_REGISTER_CHANNEL = "meta.register"
 
@@ -81,17 +82,21 @@ def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
                     task["results"].append(result)
                     task["current_stage"] += 1
                     print(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
+                    logging.info(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
                     # 复位agent
                     if agent_id and agent_id in agent_registry:
                         agent_registry[agent_id]["status"] = "idle"
                         print(f"[状态] agent {agent_id} 置为idle")
+                        logging.info(f"[状态] agent {agent_id} 置为idle")
                     # 判断是否完成
                     if task["current_stage"] >= len(task["subtasks"]):
                         task["finished"] = True
                         print(f"[主控] 任务{task_id}已完成，结果: {task['results']}")
+                        logging.info(f"[主控] 任务{task_id}已完成，结果: {task['results']}")
             await msg.ack()
         except Exception as e:
             print(f"[结果监听] 处理消息异常: {e}")
+            logging.error(f"[结果监听] 处理消息异常: {e}")
     return message_handler
 
 # 发布子任务到指定子智能体频道
