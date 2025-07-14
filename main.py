@@ -108,7 +108,7 @@ async def main():
     result_dict = {}
     result_subs = []
     for task in TASKS:
-        ch = get_task_result_channel(task["id"])
+        ch = f"TASK_{task['id']}_RESULT"  # 保证与子智能体一致
         try:
             await js.add_stream(name=f"TASK_{task['id']}_RESULT", subjects=[ch])
         except Exception:
@@ -184,6 +184,18 @@ the existing results and your available tools to solve the current task.
                     logging.info(f"[状态] agent {agent_id} 置为idle")
     print("[主控] 所有任务已完成！")
     logging.info("[主控] 所有任务已完成！")
+    # 所有任务完成后，通知所有子智能体 shutdown
+    shutdown_msg = {
+        "header": {
+            "type": "shutdown",
+            "time": time.time()
+        }
+    }
+    for agent_id, info in agent_registry.items():
+        listen_channel = info["listen_channel"]
+        await js.publish(listen_channel, json.dumps(shutdown_msg).encode())
+        print(f"[主控] 已向 {agent_id} ({listen_channel}) 发送 shutdown")
+        logging.info(f"[主控] 已向 {agent_id} ({listen_channel}) 发送 shutdown")
     await nc.close()
 
 if __name__ == "__main__":
