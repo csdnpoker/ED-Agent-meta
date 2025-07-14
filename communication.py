@@ -3,6 +3,7 @@ import json
 import time
 from nats.aio.client import Client as NATS
 from nats.js.api import StreamConfig
+import re
 
 META_REGISTER_CHANNEL = "meta.register"
 
@@ -54,19 +55,39 @@ def agent_registry_listener(agent_registry, capability_queues, js):
     return message_handler
 
 # 监听子任务结果
-def result_listener(result_dict, js, task_ids):
+def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
     async def message_handler(msg):
         try:
             data = json.loads(msg.data.decode())
             header = data.get("header", {})
+            payload = data.get("payload", {})
             if header.get("type") == "subtask-re":
-                for task_id in task_ids:
-                    if get_task_result_channel(task_id) == msg.subject:
-                        result_dict[task_id] = data["payload"]["result"]
-                        print(f"[结果] 收到{task_id}结果: {data['payload']['result']}")
+                task_id = None
+                subject = msg.subject
+                m = re.match(r"TASK_(\d+)_RESULT", subject)
+                if m:
+                    task_id = int(m.group(1))
+                else:
+                    task_id = payload.get("task_id")
+                agent_id = payload.get("agent_id")
+                result = payload.get("result")
+                # 找到对应task
+                task = next((t for t in TASKS if t["id"] == task_id), None)
+                if task is not None:
+                    task["results"].append(result)
+                    task["current_stage"] += 1
+                    print(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
+                    # 复位agent
+                    if agent_id and agent_id in agent_registry:
+                        agent_registry[agent_id]["status"] = "idle"
+                        print(f"[状态] agent {agent_id} 置为idle")
+                    # 判断是否完成
+                    if task["current_stage"] >= len(task["subtasks"]):
+                        task["finished"] = True
+                        print(f"[主控] 任务{task_id}已完成，结果: {task['results']}")
+            await msg.ack()
         except Exception as e:
-            print(f"[结果] 处理消息异常: {e}")
-        await msg.ack()
+            print(f"[结果监听] 处理消息异常: {e}")
     return message_handler
 
 # 发布子任务到指定子智能体频道

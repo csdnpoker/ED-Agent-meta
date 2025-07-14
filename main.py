@@ -113,7 +113,7 @@ async def main():
             await js.add_stream(name=f"TASK_{task['id']}_RESULT", subjects=[ch])
         except Exception:
             pass
-        sub = await js.subscribe(ch, cb=result_listener(result_dict, js, [task["id"]]), durable=f"TASK_{task['id']}_DURABLE")
+        sub = await js.subscribe(ch, cb=result_listener(result_dict, js, [task["id"]], TASKS, agent_registry), durable=f"TASK_{task['id']}_DURABLE")
         result_subs.append(sub)
     print("[主控] 启动主循环...")
     logging.info("[主控] 启动主循环...")
@@ -124,9 +124,6 @@ async def main():
                 continue
             stage = task["current_stage"]
             if stage >= len(task["subtasks"]):
-                task["finished"] = True
-                print(f"[主控] 任务{task['id']}已完成，结果: {task['results']}")
-                logging.info(f"[主控] 任务{task['id']}已完成，结果: {task['results']}")
                 continue
             subtask = task["subtasks"][stage]
             required_cap = subtask["ability"]
@@ -172,16 +169,6 @@ the existing results and your available tools to solve the current task.
                 print(f"[分发] 任务{task['id']} 阶段{stage} 分配给{agent_id}，内容: {subtask['task']}")
                 logging.info(f"[分发] 任务{task['id']} 阶段{stage} 分配给{agent_id}，内容: {subtask['task']}")
                 await publish_subtask(js, listen_channel, task["id"], query)
-            if task["id"] in result_dict:
-                result = result_dict.pop(task["id"])
-                task["results"].append(result)
-                print(f"[结果] 任务{task['id']} 阶段{stage} 结果: {result}")
-                logging.info(f"[结果] 任务{task['id']} 阶段{stage} 结果: {result}")
-                task["current_stage"] += 1
-                if agent_id:
-                    agent_registry[agent_id]["status"] = "idle"
-                    print(f"[状态] agent {agent_id} 置为idle")
-                    logging.info(f"[状态] agent {agent_id} 置为idle")
     print("[主控] 所有任务已完成！")
     logging.info("[主控] 所有任务已完成！")
     # 所有任务完成后，通知所有子智能体 shutdown
