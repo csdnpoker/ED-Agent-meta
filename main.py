@@ -108,7 +108,7 @@ async def main():
     result_dict = {}
     result_subs = []
     for task in TASKS:
-        ch = f"TASK_{task['id']}_RESULT"  # 保证与子智能体一致
+        ch = get_task_result_channel(task['id'])  # 保证与子智能体一致
         try:
             await js.add_stream(name=f"TASK_{task['id']}_RESULT", subjects=[ch])
         except Exception:

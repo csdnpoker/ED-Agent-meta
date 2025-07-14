@@ -74,6 +74,10 @@ def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
                 # 找到对应task
                 task = next((t for t in TASKS if t["id"] == task_id), None)
                 if task is not None:
+                    if isinstance(result, list):
+                        result = "\n".join(str(x) for x in result)
+                    else:
+                        result = str(result)
                     task["results"].append(result)
                     task["current_stage"] += 1
                     print(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
