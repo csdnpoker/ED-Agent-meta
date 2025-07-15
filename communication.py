@@ -41,6 +41,7 @@ def agent_registry_listener(agent_registry, capability_queues, js):
                     if agent_id not in capability_queues[cap]:
                         capability_queues[cap].append(agent_id)
                 print(f"[注册表] 新增/更新: {agent_id} 能力: {capabilities}")
+                logging.info(f"[注册] 新增/更新: {agent_id} 能力: {capabilities}")
             elif msg_type == "unregister":
                 payload = data["payload"]
                 agent_id = payload["agent_id"]
@@ -50,8 +51,10 @@ def agent_registry_listener(agent_registry, capability_queues, js):
                     if agent_id in q:
                         q.remove(agent_id)
                 print(f"[注册表] 注销: {agent_id}")
+                logging.info(f"[注册] 注销： {agent_id} ")
         except Exception as e:
             print(f"[注册表] 处理消息异常: {e}")
+            logging.info(f"[注册] 处理消息异常: {e}")
         await msg.ack()
     return message_handler
 
@@ -99,7 +102,7 @@ def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
             logging.error(f"[结果监听] 处理消息异常: {e}")
     return message_handler
 
-# 发布子任务到指定子智能体频道
+# 发布任务到指定子智能体频道
 async def publish_subtask(js, listen_channel, task_id, query):
     msg = {
         "header": {

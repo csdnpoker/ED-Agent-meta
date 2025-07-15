@@ -69,7 +69,7 @@ for i, agent in enumerate(agents):
             (row['start'] - df_assign['start'].min()).total_seconds() + 1,
             i,
             f"{row['task_id']}-{row['stage']}",
-            va='center', ha='left', fontsize=8, color='black'
+            va='center', ha='left', fontsize=5, color='black'
         )
 
 ax.set_yticks(range(len(agents)))
