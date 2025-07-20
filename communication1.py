@@ -5,6 +5,7 @@ from nats.aio.client import Client as NATS
 from nats.js.api import StreamConfig
 import re
 import logging
+from consistent_hash import ConsistentHashing
 
 META_REGISTER_CHANNEL = "meta.register"
 
@@ -12,46 +13,49 @@ META_REGISTER_CHANNEL = "meta.register"
 def get_task_result_channel(task_id):
     return f"{task_id}.result"
 
-# 监听子智能体注册/注销，动态维护注册表
-def agent_registry_listener(agent_registry, capability_queues, js):
+# 监听子智能体注册/注销，动态维护注册表和一致性哈希环
+def agent_registry_listener(agent_registry, capability_rings, js):
     async def message_handler(msg):
         try:
             data = json.loads(msg.data.decode())
             msg_type = data["header"]["type"]
+            payload = data["payload"]
+            agent_id = payload["agent_id"]
+
             if msg_type == "register":
-                payload = data["payload"]
-                agent_id = payload["agent_id"]
-                capabilities = payload["capabilities"]
+                capabilities = payload["capabilities"].split(",")
                 listen_channel = payload["listen_channel"]
                 status = payload["status"]
-                # 先将agent_id从所有能力队列中移除
-                for cap, q in capability_queues.items():
-                    if agent_id in q:
-                        q.remove(agent_id)
-                # 再根据新能力分配
+
+                # 更新注册表
                 agent_registry[agent_id] = {
-                    "capabilities": capabilities.split(","),
+                    "capabilities": capabilities,
                     "listen_channel": listen_channel,
                     "status": status
                 }
-                for cap in capabilities.split(","):
+                for cap in capabilities:
                     cap = cap.strip()
-                    if cap not in capability_queues:
-                        capability_queues[cap] = []
-                    if agent_id not in capability_queues[cap]:
-                        capability_queues[cap].append(agent_id)
+                    if cap not in capability_rings:
+                        capability_rings[cap] = ConsistentHashing()
+                    # 根据agent能力数量调整虚拟节点数，能力越多，虚拟节点越少
+                    vnodes = max(1, 10 - len(capabilities))
+                    capability_rings[cap].add_node(agent_id, replicas=vnodes)
+                print(f"[注册] : {capability_rings[cap]}")  
                 print(f"[注册表] 新增/更新: {agent_id} 能力: {capabilities}")
+                # 更新一致性哈希环
+
                 logging.info(f"[注册] 新增/更新: {agent_id} 能力: {capabilities}")
+
             elif msg_type == "unregister":
-                payload = data["payload"]
-                agent_id = payload["agent_id"]
                 if agent_id in agent_registry:
+                    # 从所有相关的哈希环中移除节点
+                    for cap in agent_registry[agent_id]["capabilities"]:
+                        if cap in capability_rings:
+                            capability_rings[cap].remove_node(agent_id)
                     del agent_registry[agent_id]
-                for cap, q in capability_queues.items():
-                    if agent_id in q:
-                        q.remove(agent_id)
                 print(f"[注册表] 注销: {agent_id}")
-                logging.info(f"[注册] 注销： {agent_id} ")
+                logging.info(f"[注册] 注销： {agent_id}")
+
         except Exception as e:
             print(f"[注册表] 处理消息异常: {e}")
             logging.info(f"[注册] 处理消息异常: {e}")
@@ -59,7 +63,7 @@ def agent_registry_listener(agent_registry, capability_queues, js):
     return message_handler
 
 # 监听子任务结果
-def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
+def result_listener(result_dict, js, task_ids, TASKS, agent_registry, busy_agent_sketch):
     async def message_handler(msg):
         try:
             data = json.loads(msg.data.decode())
@@ -83,12 +87,12 @@ def result_listener(result_dict, js, task_ids, TASKS, agent_registry):
                     else:
                         result = str(result)
                     task["results"].append(result)
-                    task["current_stage"] += 1
-                    print(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
-                    logging.info(f"[结果] 任务{task_id} 阶段{task['current_stage']-1} 结果: {result}")
+                    # task["current_stage"] += 1 # 移动到main.py中处理
+                    print(f"[结果] 任务{task_id} 阶段{task['current_stage']} 结果: {result}")
+                    logging.info(f"[结果] 任务{task_id} 阶段{task['current_stage']} 结果: {result}")
                     # 复位agent
-                    if agent_id and agent_id in agent_registry:
-                        agent_registry[agent_id]["status"] = "idle"
+                    if agent_id and busy_agent_sketch.contains(agent_id):
+                        busy_agent_sketch.delete(agent_id)
                         print(f"[状态] agent {agent_id} 置为idle")
                         logging.info(f"[状态] agent {agent_id} 置为idle")
                     # 判断是否完成
